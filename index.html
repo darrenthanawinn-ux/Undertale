@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Undertale Granny Horror Escape</title>
+    <!-- Tailwind CSS for UI and Overlays -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+        
+        body {
+            font-family: 'Press Start 2P', monospace;
+            background-color: #050505;
+            color: #f3f4f6;
+            overflow: hidden;
+            user-select: none;
+        }
+
+        .pixelated {
+            image-rendering: pixelated;
+            image-rendering: crisp-edges;
+        }
+
+        /* CRT Scanlines Overlay */
+        .scanlines::after {
+            content: " ";
+            display: block;
+            position: absolute;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.3) 50%);
+            background-size: 100% 4px;
+            z-index: 40;
+            pointer-events: none;
+        }
+
+        .vignette {
+            box-shadow: inset 0 0 120px rgba(0, 0, 0, 0.95);
+        }
+
+        .retro-btn {
+            transition: transform 0.08s ease, background-color 0.08s ease;
+            cursor: pointer;
+        }
+        .retro-btn:hover {
+            transform: scale(1.03);
+        }
+        .retro-btn:active {
+            transform: scale(0.97);
+        }
+    </style>
+</head>
+<body class="w-screen h-screen flex items-center justify-center relative bg-black">
+
+    <!-- MAIN GAME WRAPPER -->
+    <div id="app" class="relative w-[800px] h-[600px] bg-neutral-900 border-4 border-neutral-700 shadow-2xl overflow-hidden scanlines flex flex-col">
+        
+        <!-- MAIN MENU SCREEN -->
+        <div id="screen-menu" class="absolute inset-0 z-50 bg-neutral-950 flex flex-col items-center justify-center p-6 text-center">
+            <h1 class="text-3xl md:text-4xl text-red-600 mb-2 tracking-wider drop-shadow-[0_4px_10px_rgba(220,38,38,0.6)]">ESCAPE THE HOUSE</h1>
+            <p class="text-xs text-neutral-400 mb-8">Undertale x Granny Nightmare</p>
+            
+            <div class="flex flex-col gap-4 w-64">
+                <button id="btn-start" class="retro-btn bg-red-700 hover:bg-red-600 text-white py-3 px-6 text-xs border-2 border-red-900 shadow-lg">START GAME</button>
+                <button id="btn-settings" class="retro-btn bg-neutral-800 hover:bg-neutral-700 text-white py-3 px-6 text-xs border-2 border-neutral-600 shadow-lg">SETTINGS</button>
+            </div>
+
+            <div class="mt-12 text-[10px] text-neutral-500 leading-relaxed">
+                Controls: WASD / Arrow Keys to Move<br>
+                Hold SHIFT to Run (Makes Noise!) | E to Interact
+            </div>
+        </div>
+
+        <!-- SETTINGS SCREEN -->
+        <div id="screen-settings" class="absolute inset-0 z-50 bg-neutral-950 flex flex-col items-center justify-center p-6 text-center hidden">
+            <h2 class="text-2xl text-yellow-500 mb-6">SETTINGS</h2>
+            
+            <div class="flex flex-col gap-6 w-72 text-left text-xs">
+                <div class="flex justify-between items-center bg-neutral-900 p-3 border border-neutral-800">
+                    <span>AUDIO / SFX</span>
+                    <button id="btn-audio-toggle" class="retro-btn bg-green-700 px-3 py-1 text-white border border-green-900">ON</button>
+                </div>
+                <div class="flex justify-between items-center bg-neutral-900 p-3 border border-neutral-800">
+                    <span>DIFFICULTY</span>
+                    <span class="text-red-400">NORMAL</span>
+                </div>
+            </div>
+
+            <button id="btn-settings-back" class="retro-btn mt-8 bg-neutral-800 hover:bg-neutral-700 text-white py-2 px-6 text-xs border-2 border-neutral-600">BACK</button>
+        </div>
+
+        <!-- GAME OVER / JUMPSCARE SCREEN -->
+        <div id="screen-gameover" class="absolute inset-0 z-50 bg-black flex flex-col items-center justify-center p-6 text-center hidden">
+            <div class="text-red-600 text-4xl mb-4 animate-pulse">YOU WERE CAUGHT</div>
+            <p class="text-xs text-neutral-400 mb-8" id="gameover-reason">The entity dragged you into the dark...</p>
+            <button id="btn-gameover-menu" class="retro-btn bg-red-800 text-white py-3 px-6 text-xs border-2 border-red-900">MAIN MENU</button>
+        </div>
+
+        <!-- WIN SCREEN -->
+        <div id="screen-win" class="absolute inset-0 z-50 bg-neutral-900 flex flex-col items-center justify-center p-6 text-center hidden">
+            <div class="text-green-500 text-4xl mb-4">YOU ESCAPED!</div>
+            <p class="text-xs text-neutral-300 mb-8">You survived the horror house and unlocked the front door.</p>
+            <button id="btn-win-menu" class="retro-btn bg-green-700 text-white py-3 px-6 text-xs border-2 border-green-900">PLAY AGAIN</button>
+        </div>
+
+        <!-- HUD & GAMEPLAY CANVAS CONTAINER -->
+        <div id="game-container" class="relative w-full h-full flex flex-col hidden">
+            
+            <!-- Top HUD Bar -->
+            <div class="bg-neutral-950 px-4 py-2 border-b-2 border-neutral-800 flex justify-between items-center text-[10px] z-30">
+                <div class="flex items-center gap-4">
+                    <div>OBJECTIVE: <span id="hud-objective" class="text-yellow-400">Find Fuse & Fix Power</span></div>
+                </div>
+                <div class="flex items-center gap-4">
+                    <div>STAMINA: <span id="hud-stamina" class="text-green-400">100%</span></div>
+                    <div>INVENTORY: <span id="hud-inventory" class="text-neutral-400">Empty</span></div>
+                </div>
+            </div>
+
+            <!-- Main Canvas Arena -->
+            <div class="relative flex-1 overflow-hidden bg-neutral-950">
+                <canvas id="gameCanvas" width="800" height="520" class="block w-full h-full pixelated"></canvas>
+                <!-- Atmospheric Vignette -->
+                <div class="absolute inset-0 vignette pointer-events-none z-20"></div>
+            </div>
+
+            <!-- Bottom Interaction Message Bar -->
+            <div class="bg-neutral-950 px-4 py-2 border-t-2 border-neutral-800 text-[10px] text-center text-neutral-400 z-30 h-8 flex items-center justify-center" id="hud-message">
+                Explore the rooms. Watch out for noise! Press E to interact.
+            </div>
+        </div>
+
+    </div>
+
+    <!-- MAIN GAME LOGIC SCRIPT -->
+    <script>
+        let audioCtx = null;
+        let audioEnabled = true;
+
+        function initAudio() {
+            if (!audioCtx) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContext();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function playSound(type) {
+            if (!audioEnabled || !audioCtx) return;
+            try {
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                const now = audioCtx.currentTime;
+
+                if (type === 'click') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(400, now);
+                    osc.frequency.exponentialRampToValueAtTime(600, now + 0.05);
+                    gain.gain.setValueAtTime(0.1, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.05);
+                    osc.start(now);
+                    osc.stop(now + 0.05);
+                } else if (type === 'step') {
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(90, now);
+                    osc.frequency.exponentialRampToValueAtTime(30, now + 0.07);
+                    gain.gain.setValueAtTime(0.08, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.07);
+                    osc.start(now);
+                    osc.stop(now + 0.07);
+                } else if (type === 'pickup') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(300, now);
+                    osc.frequency.exponentialRampToValueAtTime(900, now + 0.15);
+                    gain.gain.setValueAtTime(0.15, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.15);
+                    osc.start(now);
+                    osc.stop(now + 0.15);
+                } else if (type === 'unlock') {
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(150, now);
+                    osc.frequency.setValueAtTime(320, now + 0.12);
+                    gain.gain.setValueAtTime(0.12, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.25);
+                    osc.start(now);
+                    osc.stop(now + 0.25);
+                } else if (type === 'jumpscare') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(120, now);
+                    osc.frequency.linearRampToValueAtTime(40, now + 0.4);
+                    gain.gain.setValueAtTime(0.4, now);
+                    gain.gain.linearRampToValueAtTime(0.01, now + 0.4);
+                    osc.start(now);
+                    osc.stop(now + 0.4);
+                }
+            } catch (e) {
+                console.error("Audio error:", e);
+            }
+        }
+
+        const screenMenu = document.getElementById('screen-menu');
+        const screenSettings = document.getElementById('screen-settings');
+        const screenGameOver = document.getElementById('screen-gameover');
+        const screenWin = document.getElementById('screen-win');
+        const gameContainer = document.getElementById('game-container');
+
+        document.getElementById('btn-start').addEventListener('click', () => {
+            initAudio();
+            playSound('click');
+            screenMenu.classList.add('hidden');
+            screenSettings.classList.add('hidden');
+            screenGameOver.classList.add('hidden');
+            screenWin.classList.add('hidden');
+            gameContainer.classList.remove('hidden');
+            startGameSession();
+        });
+
+        document.getElementById('btn-settings').addEventListener('click', () => {
+            playSound('click');
+            screenMenu.classList.add('hidden');
+            screenSettings.classList.remove('hidden');
+        });
+
+        document.getElementById('btn-settings-back').addEventListener('click', () => {
+            playSound('click');
+            screenSettings.classList.add('hidden');
+            screenMenu.classList.remove('hidden');
+        });
+
+        document.getElementById('btn-audio-toggle').addEventListener('click', () => {
+            audioEnabled = !audioEnabled;
+            const btn = document.getElementById('btn-audio-toggle');
+            btn.innerText = audioEnabled ? "ON" : "OFF";
+            btn.className = audioEnabled ? "retro-btn bg-green-700 px-3 py-1 text-white border border-green-900" : "retro-btn bg-red-700 px-3 py-1 text-white border border-red-900";
+            playSound('click');
+        });
+
+        document.getElementById('btn-gameover-menu').addEventListener('click', returnToMainMenu);
+        document.getElementById('btn-win-menu').addEventListener('click', returnToMainMenu);
+
+        function returnToMainMenu() {
+            playSound('click');
+            gameRunning = false;
+            gameContainer.classList.add('hidden');
+            screenGameOver.classList.add('hidden');
+            screenWin.classList.add('hidden');
+            screenSettings.classList.add('hidden');
+            screenMenu.classList.remove('hidden');
+        }
+
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let gameRunning = false;
+        let keysPressed = {};
+
+        let player = {
+            x: 80,
+            y: 80,
+            radius: 12,
+            speed: 2.2,
+            runSpeed: 4.2,
+            stamina: 100,
+            maxStamina: 100,
+            inventory: null
+        };
+
+        let entity = {
+            x: 720,
+            y: 440,
+            radius: 14,
+            speed: 1.85,
+            state: 'PATROL',
+            patrolTarget: {x: 100, y: 400}
+        };
+
+        let walls = [];
+        let doors = [];
+        let items = [];
+        let breakerFixed = false;
+
+        function startGameSession() {
+            gameRunning = true;
+            player.x = 75;
+            player.y = 75;
+            player.stamina = 100;
+            player.inventory = null;
+            breakerFixed = false;
+
+            entity.x = 730;
+            entity.y = 450;
+            entity.state = 'PATROL';
+
+            // House Walls Layout
+            walls = [
+                {x: 0, y: 0, w: 800, h: 20},
+                {x: 0, y: 500, w: 800, h: 20},
+                {x: 0, y: 0, w: 20, h: 520},
+                {x: 780, y: 0, w: 20, h: 520},
+                {x: 210, y: 20, w: 20, h: 190},
+                {x: 210, y: 310, w: 20, h: 190},
+                {x: 420, y: 140, w: 20, h: 260},
+                {x: 600, y: 20, w: 20, h: 210},
+                {x: 600, y: 330, w: 20, h: 170}
+            ];
+
+            doors = [
+                {id: 'red_door', x: 210, y: 210, w: 20, h: 100, locked: true, keyRequired: 'red_key', name: 'Red Room Door'},
+                {id: 'blue_door', x: 600, y: 210, w: 20, h: 120, locked: true, keyRequired: 'blue_key', name: 'Blue Vault Door'},
+                {id: 'front_door', x: 780, y: 240, w: 20, h: 80, locked: true, keyRequired: 'front_exit', name: 'Front Exit Door'}
+            ];
+
+            items = [
+                {id: 'red_key', x: 110, y: 440, collected: false, name: 'Red Key', color: '#ef4444'},
+                {id: 'blue_key', x: 700, y: 70, collected: false, name: 'Blue Key', color: '#3b82f6'},
+                {id: 'fuse', x: 310, y: 70, collected: false, name: 'Breaker Fuse', color: '#eab308'},
+                {id: 'crowbar', x: 680, y: 460, collected: false, name: 'Crowbar', color: '#a855f7'}
+            ];
+
+            document.getElementById('hud-objective').innerText = 'Find Fuse & Fix Power';
+            document.getElementById('hud-message').innerText = 'Explore rooms. Watch out for noise!';
+            updateHUD();
+        }
+
+        window.addEventListener('keydown', (e) => {
+            const key = e.key.toLowerCase();
+            keysPressed[key] = true;
+            if (key === 'e') {
+                handleInteraction();
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            keysPressed[e.key.toLowerCase()] = false;
+        });
+
+        function checkCollision(nx, ny, radius) {
+            for (let w of walls) {
+                if (nx + radius > w.x && nx - radius < w.x + w.w &&
+                    ny + radius > w.y && ny - radius < w.y + w.h) {
+                    return true;
+                }
+            }
+            for (let d of doors) {
+                if (d.locked && nx + radius > d.x && nx - radius < d.x + d.w &&
+                    ny + radius > d.y && ny - radius < d.y + d.h) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function handleInteraction() {
+            if (!gameRunning) return;
+
+            // Collect items
+            for (let item of items) {
+                if (!item.collected) {
+                    let dist = Math.hypot(player.x - item.x, player.y - item.y);
+                    if (dist < 40) {
+                        item.collected = true;
+                        player.inventory = item.id;
+                        playSound('pickup');
+                        document.getElementById('hud-message').innerText = `Picked up ${item.name}!`;
+                        updateHUD();
+                        return;
+                    }
+                }
+            }
+
+            // Fix Breaker Box (Top Right Room)
+            let breakerDist = Math.hypot(player.x - 730, player.y - 45);
+            if (breakerDist < 45 && !breakerFixed) {
+                if (player.inventory === 'fuse') {
+                    breakerFixed = true;
+                    player.inventory = null;
+                    playSound('unlock');
+                    document.getElementById('hud-message').innerText = 'Power restored! Front exit unlocked.';
+                    for (let d of doors) {
+                        if (d.id === 'front_door') d.locked = false;
+                    }
+                    document.getElementById('hud-objective').innerText = 'Escape through the Front Door!';
+                    updateHUD();
+                } else {
+                    document.getElementById('hud-message').innerText = 'Breaker is dead. Needs a Fuse.';
+                    playSound('step');
+                }
+                return;
+            }
+
+            // Unlock Doors
+            for (let d of doors) {
+                let dist = Math.hypot(player.x - (d.x + d.w/2), player.y - (d.y + d.h/2));
+                if (dist < 50) {
+                    if (d.locked) {
+                        if (player.inventory === d.keyRequired) {
+                            d.locked = false;
+                            player.inventory = null;
+                            playSound('unlock');
+                            document.getElementById('hud-message').innerText = `Unlocked ${d.name}!`;
+                            updateHUD();
+                        } else {
+                            document.getElementById('hud-message').innerText = `${d.name} locked. Requires ${d.keyRequired.replace('_', ' ')}.`;
+                            playSound('step');
+                        }
+                    } else if (d.id === 'front_door' && breakerFixed) {
+                        triggerWin();
+                    }
+                }
+            }
+        }
+
+        function updateGame(dt) {
+            if (!gameRunning) return;
+
+            let dx = 0;
+            let dy = 0;
+            let isRunning = (keysPressed['shift'] && player.stamina > 4);
+
+            if (keysPressed['w'] || keysPressed['arrowup']) dy -= 1;
+            if (keysPressed['s'] || keysPressed['arrowdown']) dy += 1;
+            if (keysPressed['a'] || keysPressed['arrowleft']) dx -= 1;
+            if (keysPressed['d'] || keysPressed['arrowright']) dx += 1;
+
+            if (dx !== 0 && dy !== 0) {
+                dx *= 0.7071;
+                dy *= 0.7071;
+            }
+
+            let currentSpeed = player.speed;
+            if (isRunning && (dx !== 0 || dy !== 0)) {
+                currentSpeed = player.runSpeed;
+                player.stamina = Math.max(0, player.stamina - 0.45);
+            } else {
+                player.stamina = Math.min(player.maxStamina, player.stamina + 0.25);
+            }
+
+            document.getElementById('hud-stamina').innerText = Math.floor(player.stamina) + '%';
+
+            let nx = player.x + dx * currentSpeed;
+            let ny = player.y + dy * currentSpeed;
+
+            if (!checkCollision(nx, player.y, player.radius)) player.x = nx;
+            if (!checkCollision(player.x, ny, player.radius)) player.y = ny;
+
+            // Entity AI & Noise Detection
+            updateEntityAI(isRunning && (dx !== 0 || dy !== 0));
+
+            // Check Catch
+            let catchDist = Math.hypot(player.x - entity.x, player.y - entity.y);
+            if (catchDist < player.radius + entity.radius - 2) {
+                triggerGameOver("The roaming entity caught you in the dark!");
+            }
+        }
+
+        function updateEntityAI(isPlayerRunning) {
+            let distToPlayer = Math.hypot(player.x - entity.x, player.y - entity.y);
+            let aggroRange = isPlayerRunning ? 230 : 130;
+
+            if (distToPlayer < aggroRange) {
+                entity.state = 'CHASE';
+            } else if (entity.state === 'CHASE' && distToPlayer > 320) {
+                entity.state = 'PATROL';
+            }
+
+            if (entity.state === 'CHASE') {
+                let angle = Math.atan2(player.y - entity.y, player.x - entity.x);
+                let ex = entity.x + Math.cos(angle) * entity.speed;
+                let ey = entity.y + Math.sin(angle) * entity.speed;
+                if (!checkCollision(ex, entity.y, entity.radius)) entity.x = ex;
+                if (!checkCollision(entity.x, ey, entity.radius)) entity.y = ey;
+            } else {
+                let angle = Math.atan2(entity.patrolTarget.y - entity.y, entity.patrolTarget.x - entity.x);
+                let ex = entity.x + Math.cos(angle) * (entity.speed * 0.7);
+                let ey = entity.y + Math.sin(angle) * (entity.speed * 0.7);
+
+                if (!checkCollision(ex, entity.y, entity.radius)) entity.x = ex;
+                else setNewPatrolTarget();
+
+                if (!checkCollision(entity.x, ey, entity.radius)) entity.y = ey;
+                else setNewPatrolTarget();
+
+                if (Math.hypot(entity.patrolTarget.x - entity.x, entity.patrolTarget.y - entity.y) < 20) {
+                    setNewPatrolTarget();
+                }
+            }
+        }
+
+        function setNewPatrolTarget() {
+            const targets = [
+                {x: 100, y: 100}, {x: 350, y: 80}, {x: 700, y: 100},
+                {x: 100, y: 400}, {x: 350, y: 450}, {x: 700, y: 400}
+            ];
+            entity.patrolTarget = targets[Math.floor(Math.random() * targets.length)];
+        }
+
+        function renderGame() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Floor
+            ctx.fillStyle = '#101014';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Walls
+            ctx.fillStyle = '#222228';
+            for (let w of walls) {
+                ctx.fillRect(w.x, w.y, w.w, w.h);
+                ctx.strokeStyle = '#3f3f46';
+                ctx.strokeRect(w.x, w.y, w.w, w.h);
+            }
+
+            // Doors
+            for (let d of doors) {
+                ctx.fillStyle = d.locked ? (d.keyRequired === 'red_key' ? '#991b1b' : d.keyRequired === 'blue_key' ? '#1e40af' : '#854d0e') : '#166534';
+                ctx.fillRect(d.x, d.y, d.w, d.h);
+                ctx.strokeStyle = '#ffffff';
+                ctx.strokeRect(d.x, d.y, d.w, d.h);
+            }
+
+            // Items
+            for (let item of items) {
+                if (!item.collected) {
+                    ctx.fillStyle = item.color;
+                    ctx.beginPath();
+                    ctx.arc(item.x, item.y, 6, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.stroke();
+                }
+            }
+
+            // Breaker Box Indicator
+            ctx.fillStyle = breakerFixed ? '#22c55e' : '#eab308';
+            ctx.fillRect(715, 25, 30, 20);
+            ctx.fillStyle = '#000000';
+            ctx.font = '8px monospace';
+            ctx.fillText("BOX", 720, 38);
+
+            // Player Soul
+            ctx.fillStyle = '#ef4444';
+            ctx.beginPath();
+            ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.strokeStyle = '#fca5a5';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+
+            // Monster Entity
+            ctx.fillStyle = '#7f1d1d';
+            ctx.beginPath();
+            ctx.arc(entity.x, entity.y, entity.radius, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = '#ef4444';
+            ctx.fillRect(entity.x - 4, entity.y - 3, 3, 3);
+            ctx.fillRect(entity.x + 2, entity.y - 3, 3, 3);
+
+            // Dynamic Flashlight Darkness
+            drawLightingOverlay();
+        }
+
+        function drawLightingOverlay() {
+            ctx.save();
+            let grad = ctx.createRadialGradient(player.x, player.y, 20, player.x, player.y, 170);
+            grad.addColorStop(0, 'rgba(0, 0, 0, 0)');
+            grad.addColorStop(0.5, 'rgba(0, 0, 0, 0.75)');
+            grad.addColorStop(1, 'rgba(0, 0, 0, 0.96)');
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.restore();
+        }
+
+        function updateHUD() {
+            let inv = player.inventory ? player.inventory.replace('_', ' ').toUpperCase() : 'Empty';
+            document.getElementById('hud-inventory').innerText = inv;
+        }
+
+        function triggerGameOver(reason) {
+            gameRunning = false;
+            playSound('jumpscare');
+            document.getElementById('gameover-reason').innerText = reason;
+            screenGameOver.classList.remove('hidden');
+        }
+
+        function triggerWin() {
+            gameRunning = false;
+            playSound('unlock');
+            screenWin.classList.remove('hidden');
+        }
+
+        let lastTime = performance.now();
+        function mainLoop(time) {
+             let dt = (time - lastTime) / 1000;
+            lastTime = time;
+
+            if (gameRunning) {
+                updateGame(dt);
+                renderGame();
+            }
+            requestAnimationFrame(mainLoop);
+        }
+
+        requestAnimationFrame(mainLoop);
+    </script>
+</body>
+</html>
